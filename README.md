@@ -63,9 +63,16 @@ cd project
 ---
 
 ### 2. Backend Setup
+
+#### Install Python 3.11 (if not installed)
+Using Homebrew:
+```bash
+brew install python@3.11
+```
+
 ```bash
 cd backend
-python -m venv venv
+python3.11 -m venv venv
 ```
 
 #### Activate Virtual Environment
