@@ -1,0 +1,180 @@
+import React, { useState, useRef, useEffect } from 'react';
+import axios from 'axios';
+
+const Message = ({ chat }) => {
+  const isBot = chat.role === 'bot';
+
+  return (
+    <div className={`message-wrapper ${isBot ? 'bot' : 'user'}`}>
+      <div className="message-avatar">
+        {isBot ? (
+          <div className="bot-avatar">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a10 10 0 1 0 10 10H12V2z"></path><path d="M12 2a10 10 0 0 1 10 10h-10V2z"></path></svg>
+          </div>
+        ) : (
+          <img src="https://ui-avatars.com/api/?name=Sophia+A&background=aa3bff&color=fff" alt="User" />
+        )}
+      </div>
+      <div className="message-content glass">
+        <div className="message-text">{chat.text}</div>
+        {chat.sources && chat.sources.length > 0 && (
+          <div className="message-sources">
+            <p className="sources-title">Sources Found:</p>
+            <div className="sources-list">
+              {chat.sources.map((s, i) => (
+                <a key={i} href={s.href} target="_blank" rel="noopener noreferrer" className="source-link">
+                  {new URL(s.href).hostname}
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// token is the only new prop added
+const ResearchChat = ({ session, token, onUpdateMessages }) => {
+  const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(false);
+  const messagesEndRef = useRef(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(scrollToBottom, [session.messages]);
+
+  const handleSend = async () => {
+    if (!query.trim()) return;
+
+    const userMsg = { role: 'user', text: query };
+    const newMessages = [...session.messages, userMsg];
+    onUpdateMessages(newMessages);
+    setQuery("");
+    setLoading(true);
+
+    try {
+      const res = await axios.post(
+        "http://127.0.0.1:8000/research",
+        { query },
+        { headers: { Authorization: `Bearer ${token}` } }  // only change
+      );
+
+      const botMsg = {
+        role: 'bot',
+        text: res.data.final_report,
+        sources: res.data.filtered_results
+      };
+
+      onUpdateMessages([...newMessages, botMsg]);
+    } catch (err) {
+      const errorText = err.response?.status === 401
+        ? "Session expired. Please log in again."
+        : "Sorry, I encountered an error while researching. Please try again.";
+      onUpdateMessages([...newMessages, { role: 'bot', text: errorText }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="research-view">
+      <div className="chat-container glass">
+        <div className="chat-header">
+          <div className="agent-status">
+            <div className="status-dot"></div>
+            <span>Agent Medusa Core</span>
+          </div>
+          <div className="chat-actions">
+            <button className="chat-action-btn">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+              Export
+            </button>
+          </div>
+        </div>
+
+        <div className="chat-messages">
+          {session.messages.map((m, i) => (
+            <Message key={i} chat={m} />
+          ))}
+          {loading && (
+            <div className="message-wrapper bot">
+              <div className="message-avatar">
+                <div className="bot-avatar loading">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"></path></svg>
+                </div>
+              </div>
+              <div className="message-content glass">
+                <div className="typing-indicator">
+                  <span></span><span></span><span></span>
+                </div>
+                <p className="loading-text">Agent is searching the web and synthesizing findings...</p>
+              </div>
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+
+        <div className="chat-input-area">
+          <div className="input-wrapper glass">
+            <textarea
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Ask me to research anything..."
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+            />
+            <button className="send-btn" onClick={handleSend} disabled={loading}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+            </button>
+          </div>
+          <p className="input-hint">Press Enter to send, Shift + Enter for new line</p>
+        </div>
+      </div>
+
+      {/* All your existing styles unchanged */}
+      <style jsx>{`
+        .research-view { height: 100%; display: flex; flex-direction: column; max-width: 1000px; margin: 0 auto; }
+        .chat-container { flex: 1; display: flex; flex-direction: column; border-radius: var(--radius-xl); border: 1px solid var(--border); overflow: hidden; background: rgba(255, 255, 255, 0.4); }
+        .chat-header { padding: 16px 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: rgba(255, 255, 255, 0.8); }
+        .agent-status { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 14px; }
+        .status-dot { width: 10px; height: 10px; background: #10B981; border-radius: 50%; box-shadow: 0 0 8px #10b98188; }
+        .chat-action-btn { background: var(--white); border: 1px solid var(--border); padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 500; display: flex; align-items: center; gap: 6px; }
+        .chat-messages { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 24px; }
+        .message-wrapper { display: flex; gap: 16px; max-width: 85%; }
+        .message-wrapper.user { flex-direction: row-reverse; align-self: flex-end; }
+        .message-avatar img, .bot-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; }
+        .bot-avatar { background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; }
+        .bot-avatar.loading svg { animation: spin 2s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .message-content { padding: 16px 20px; border-radius: 20px; font-size: 15px; line-height: 1.6; white-space: pre-wrap; }
+        .message-wrapper.user .message-content { background: var(--primary); color: white; border-bottom-right-radius: 4px; }
+        .message-wrapper.bot .message-content { background: white; border-bottom-left-radius: 4px; border: 1px solid var(--border); }
+        .message-sources { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
+        .sources-title { font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; }
+        .sources-list { display: flex; flex-wrap: wrap; gap: 8px; }
+        .source-link { font-size: 11px; padding: 4px 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; color: var(--primary); text-decoration: none; }
+        .typing-indicator { display: flex; gap: 4px; margin-bottom: 8px; }
+        .typing-indicator span { width: 6px; height: 6px; background: var(--text-muted); border-radius: 50%; animation: bounce 1.4s infinite ease-in-out both; }
+        .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+        .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1.0); } }
+        .loading-text { font-size: 13px; color: var(--text-muted); font-style: italic; }
+        .chat-input-area { padding: 24px; background: rgba(255, 255, 255, 0.6); }
+        .input-wrapper { display: flex; align-items: flex-end; gap: 12px; background: white; border: 1px solid var(--border); border-radius: 16px; padding: 12px 16px; box-shadow: var(--shadow-sm); }
+        textarea { flex: 1; background: none; border: none; resize: none; padding: 8px 0; height: 40px; max-height: 150px; font-size: 15px; }
+        .send-btn { width: 40px; height: 40px; border-radius: 10px; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; }
+        .send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .input-hint { font-size: 11px; color: var(--text-muted); margin-top: 8px; text-align: center; }
+      `}</style>
+    </div>
+  );
+};
+
+export default ResearchChat;
